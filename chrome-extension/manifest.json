@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Random Notes TTS",
+  "version": "1.0",
+  "description": "Reads a random paragraph from the page.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tts"
+  ],
+  "host_permissions": [
+    "https://translate.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ],
+  "action": {}
+}
