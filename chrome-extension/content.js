@@ -256,6 +256,11 @@ class RandomParagraphTTS {
     constructor() {
         this.currentFocusedParagraph = null;
         this.button = null;
+        this.continuousButton = null; // 🔁 button
+        this.stopButton = null;       // ⏹ button
+        this.continuousTimer = null;
+        this.continuousActive = false;
+        this.continuousDelayMs = 25000; // 25 seconds as requested
         this.init();
     }
 
@@ -267,7 +272,7 @@ class RandomParagraphTTS {
 
     createButton() {
         this.button = document.createElement('button');
-        this.button.textContent = '🔊 Read Random Paragraph';
+        this.button.textContent = '🔊';
         
         // Style the button to be on the top right
         Object.assign(this.button.style, {
@@ -305,29 +310,24 @@ class RandomParagraphTTS {
     }
 
     handleButtonClick() {
-        // 1. Find all paragraph tags
+        this.pickAndSpeakRandom();
+    }
+
+    pickAndSpeakRandom() {
         const paragraphs = document.querySelectorAll('p');
-
-        if (paragraphs.length > 0) {
-            // 2. Remove previous focus if any
-            this.removeParagraphFocus();
-
-            // 3. Select a random paragraph
-            const randomIndex = Math.floor(Math.random() * paragraphs.length);
-            const randomParagraph = paragraphs[randomIndex];
-            const textToSpeak = randomParagraph.innerText;
-
-            // 4. Focus on the selected paragraph
-            this.focusOnParagraph(randomParagraph);
-
-            // 5. Speak the text (use Web Speech API to avoid remote TTS issues)
-            if (textToSpeak && textToSpeak.trim().length > 0) {
-                this.speakText(textToSpeak.trim());
-            } else {
-                console.log("Selected paragraph is empty.");
-            }
+        if (!paragraphs.length) {
+            console.log('No <p> tags found on this page.');
+            return;
+        }
+        this.removeParagraphFocus();
+        const randomIndex = Math.floor(Math.random() * paragraphs.length);
+        const randomParagraph = paragraphs[randomIndex];
+        const textToSpeak = randomParagraph?.innerText || '';
+        this.focusOnParagraph(randomParagraph);
+        if (textToSpeak && textToSpeak.trim().length > 0) {
+            this.speakText(textToSpeak.trim());
         } else {
-            console.log("No <p> tags found on this page.");
+            console.log('Selected paragraph is empty.');
         }
     }
 
@@ -465,6 +465,143 @@ class RandomParagraphTTS {
         }
     }
 
+    // ---------------- Continuous Mode ----------------
+    createExtraButtons() {
+        // Continuous (🔁)
+        this.continuousButton = document.createElement('button');
+        this.continuousButton.textContent = '🔁';
+        Object.assign(this.continuousButton.style, {
+            padding: '8px 10px',
+            cursor: 'pointer',
+            backgroundColor: '#34A853',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+            fontSize: '22px',
+            lineHeight: '1'
+        });
+        this.continuousButton.title = 'Start continuous random paragraph reading';
+        this.continuousButton.addEventListener('click', () => {
+            if (this.continuousActive) {
+                this.showToast('Continuous mode already running.');
+            } else {
+                this.startContinuous();
+            }
+        });
+        this.continuousButton.onmouseover = () => this.continuousButton.style.backgroundColor = '#2d8f47';
+        this.continuousButton.onmouseout = () => this.continuousButton.style.backgroundColor = '#34A853';
+
+        // Stop (⏹)
+        this.stopButton = document.createElement('button');
+        this.stopButton.textContent = '⏹';
+        Object.assign(this.stopButton.style, {
+            padding: '8px 10px',
+            cursor: 'pointer',
+            backgroundColor: '#EA4335',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+            fontSize: '22px',
+            lineHeight: '1'
+        });
+        this.stopButton.title = 'Stop continuous mode and current speech';
+        this.stopButton.addEventListener('click', () => {
+            this.stopContinuous();
+            this.showToast('Stopped continuous reading.');
+        });
+        this.stopButton.onmouseover = () => this.stopButton.style.backgroundColor = '#c7362b';
+        this.stopButton.onmouseout = () => this.stopButton.style.backgroundColor = '#EA4335';
+    }
+
+    attachExtraButtons(container) {
+        if (!this.continuousButton || !this.stopButton) this.createExtraButtons();
+        if (container) {
+            // Insert new buttons just before the main random button for intuitive grouping
+            // Container currently: [DarkMode, TTS]; we want [DarkMode, 🔁, ⏹, TTS]
+            const children = Array.from(container.children);
+            const ttsIndex = children.indexOf(this.button);
+            if (ttsIndex > -1) {
+                container.insertBefore(this.continuousButton, this.button);
+                container.insertBefore(this.stopButton, this.button);
+            } else {
+                container.appendChild(this.continuousButton);
+                container.appendChild(this.stopButton);
+            }
+        } else {
+            // Fallback: append to body positioned near the original button
+            this.positionExtraButtonsFixed();
+            document.body.appendChild(this.continuousButton);
+            document.body.appendChild(this.stopButton);
+        }
+    }
+
+    positionExtraButtonsFixed() {
+        // Stack horizontally leftwards of main button
+        const base = { position: 'fixed', top: '20px', zIndex: '10000' };
+        Object.assign(this.continuousButton.style, base, { right: '200px' });
+        Object.assign(this.stopButton.style, base, { right: '150px' });
+    }
+
+    startContinuous() {
+        this.continuousActive = true;
+        this.showToast('Continuous mode started: new random paragraph every 25s.');
+        // Start immediately then schedule next
+        this.pickAndSpeakRandom();
+        this.scheduleNextContinuous();
+    }
+
+    scheduleNextContinuous() {
+        if (!this.continuousActive) return;
+        clearTimeout(this.continuousTimer);
+        this.continuousTimer = setTimeout(() => {
+            if (!this.continuousActive) return;
+            this.pickAndSpeakRandom();
+            this.scheduleNextContinuous();
+        }, this.continuousDelayMs);
+    }
+
+    stopContinuous() {
+        this.continuousActive = false;
+        clearTimeout(this.continuousTimer);
+        this.continuousTimer = null;
+        this.stopSpeech();
+    }
+
+    // Toast utility
+    showToast(message) {
+        // Remove existing toast if present
+        const existing = document.getElementById('ext-tts-toast');
+        if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+        const toast = document.createElement('div');
+        toast.id = 'ext-tts-toast';
+        toast.textContent = message;
+        Object.assign(toast.style, {
+            position: 'fixed',
+            top: '70px',
+            right: '20px',
+            maxWidth: '260px',
+            background: 'rgba(0,0,0,0.85)',
+            color: '#fff',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '13px',
+            lineHeight: '1.3',
+            zIndex: '10000',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            opacity: '0',
+            transition: 'opacity 0.25s'
+        });
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => toast.style.opacity = '1');
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.parentNode && toast.parentNode.removeChild(toast), 400);
+        }, 3200);
+    }
+
     // Public method to destroy the TTS instance
     destroy() {
         this.stopSpeech();
@@ -472,8 +609,13 @@ class RandomParagraphTTS {
         if (this.button && this.button.parentNode) {
             this.button.parentNode.removeChild(this.button);
         }
+        if (this.continuousButton && this.continuousButton.parentNode) this.continuousButton.parentNode.removeChild(this.continuousButton);
+        if (this.stopButton && this.stopButton.parentNode) this.stopButton.parentNode.removeChild(this.stopButton);
+        this.stopContinuous();
         this.button = null;
         this.currentFocusedParagraph = null;
+        this.continuousButton = null;
+        this.stopButton = null;
     }
 }
 
@@ -609,3 +751,14 @@ const ttsInstance = new RandomParagraphTTS();
 const darkModeInstance = new DarkModeFunctionality(ttsInstance.button);
 // Initialize Table of Contents (positioned beneath buttons)
 const tocInstance = new TableOfContents({ offsetTop: 80 });
+// Attach continuous + stop buttons once dark mode container exists
+if (darkModeInstance && darkModeInstance.container) {
+    ttsInstance.attachExtraButtons(darkModeInstance.container);
+} else {
+    // Fallback after a short delay if container not yet ready
+    setTimeout(() => {
+        if (darkModeInstance && darkModeInstance.container) {
+            ttsInstance.attachExtraButtons(darkModeInstance.container);
+        }
+    }, 100);
+}
