@@ -311,6 +311,7 @@ class RandomParagraphTTS {
 
     handleButtonClick() {
         this.pickAndSpeakRandom();
+        startVideoKeepAwake();
     }
 
     pickAndSpeakRandom() {
@@ -743,6 +744,34 @@ class DarkModeFunctionality {
         this.container = null;
         this.styleEl = null;
     }
+}
+
+
+function startVideoKeepAwake() {
+  if (document.getElementById('ext-keepawake-video')) return;
+
+  const v = document.createElement('video');
+  v.id = 'ext-keepawake-video';
+  v.playsInline = true;
+  v.muted = true;
+  v.loop = true;
+  v.style.position = 'fixed';
+  v.style.width = '1px';
+  v.style.height = '1px';
+  v.style.opacity = '0';
+  v.style.pointerEvents = 'none';
+  // A 1-second silent WebM or MP4 data URI; this is just an example placeholder
+  v.src = 'data:video/webm;base64,GkXfo0AgQoaBAUL...'; // supply a valid tiny silent clip
+  document.body.appendChild(v);
+  v.play().catch(err => console.warn('Fallback video play failed:', err));
+}
+
+function stopVideoKeepAwake() {
+  const v = document.getElementById('ext-keepawake-video');
+  if (v) {
+    v.pause();
+    v.remove();
+  }
 }
 
 // Initialize the TTS functionality
