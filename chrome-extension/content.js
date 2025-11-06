@@ -260,7 +260,7 @@ class RandomParagraphTTS {
         this.stopButton = null;       // ⏹ button
         this.continuousTimer = null;
         this.continuousActive = false;
-        this.continuousDelayMs = 25000; // 25 seconds as requested
+        this.continuousDelayMs = 0; // 25 seconds as requested
         this.init();
     }
 
@@ -314,10 +314,11 @@ class RandomParagraphTTS {
         startVideoKeepAwake();
     }
 
-    pickAndSpeakRandom() {
+    pickAndSpeakRandom(callback) {
         const paragraphs = document.querySelectorAll('p');
         if (!paragraphs.length) {
             console.log('No <p> tags found on this page.');
+            if (callback) callback();
             return;
         }
         this.removeParagraphFocus();
@@ -326,9 +327,10 @@ class RandomParagraphTTS {
         const textToSpeak = randomParagraph?.innerText || '';
         this.focusOnParagraph(randomParagraph);
         if (textToSpeak && textToSpeak.trim().length > 0) {
-            this.speakText(textToSpeak.trim());
+            this.speakText(textToSpeak.trim(), callback);
         } else {
             console.log('Selected paragraph is empty.');
+            if (callback) callback();
         }
     }
 
@@ -389,7 +391,7 @@ class RandomParagraphTTS {
         }
     }
 
-    speakText(fullText) {
+    speakText(fullText, callback) {
         if ('speechSynthesis' in window) {
             // Cancel any ongoing speech
             window.speechSynthesis.cancel();
@@ -398,11 +400,20 @@ class RandomParagraphTTS {
             const maxChunk = 800; // safe chunk size
             const chunks = this.chunkText(fullText, maxChunk);
 
-            this.speakChunks(chunks, 0);
+            this.speakChunks(chunks, 0, callback);
         } else if (chrome?.tts) {
-            chrome.tts.speak(fullText, { lang: 'en-US', rate: 1 });
+            chrome.tts.speak(fullText, {
+                lang: 'en-US',
+                rate: 1,
+                onEvent: (event) => {
+                    if (event.type === 'end' || event.type === 'interrupted' || event.type === 'error') {
+                        if (callback) callback();
+                    }
+                }
+            });
         } else {
             console.warn("No speech synthesis available.");
+            if (callback) callback();
         }
     }
 
@@ -422,17 +433,20 @@ class RandomParagraphTTS {
         return chunks;
     }
 
-    speakChunks(chunks, index) {
-        if (index >= chunks.length) return;
+    speakChunks(chunks, index, callback) {
+        if (index >= chunks.length) {
+            if (callback) callback();
+            return;
+        }
         
         const utterance = new SpeechSynthesisUtterance(chunks[index]);
         utterance.lang = 'en-US';
         utterance.rate = 1;
         utterance.pitch = 1;
-        utterance.onend = () => this.speakChunks(chunks, index + 1);
+        utterance.onend = () => this.speakChunks(chunks, index + 1, callback);
         utterance.onerror = (e) => {
             console.warn("Speech error", e);
-            this.speakChunks(chunks, index + 1);
+            this.speakChunks(chunks, index + 1, callback);
         };
         
         window.speechSynthesis.speak(utterance);
@@ -548,19 +562,19 @@ class RandomParagraphTTS {
     startContinuous() {
         this.continuousActive = true;
         this.showToast('Continuous mode started: new random paragraph every 25s.');
-        // Start immediately then schedule next
-        this.pickAndSpeakRandom();
-        this.scheduleNextContinuous();
+        // Start immediately, and the callback will schedule the next iteration.
+        this.pickAndSpeakRandom(() => this.scheduleNextContinuous());
     }
 
     scheduleNextContinuous() {
         if (!this.continuousActive) return;
         clearTimeout(this.continuousTimer);
-        this.continuousTimer = setTimeout(() => {
+        this.pickAndSpeakRandom(() => {
+          this.continuousTimer = setTimeout(() => {
             if (!this.continuousActive) return;
-            this.pickAndSpeakRandom();
             this.scheduleNextContinuous();
         }, this.continuousDelayMs);
+      });
     }
 
     stopContinuous() {
