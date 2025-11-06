@@ -17,6 +17,8 @@ class TableOfContents {
         this.maxItems = options.maxItems || 500; // safety cap
         this.container = null;
         this.listEl = null;
+        this.toggleButton = null;
+        this.isTocVisible = true;
         this.headings = [];
         this.observer = null;
         this.activeId = null;
@@ -139,7 +141,34 @@ class TableOfContents {
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             zIndex: '10000'
         });
-        this.container.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:14px;">Table of Contents</div>';
+
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.justifyContent = 'space-between';
+        header.style.alignItems = 'center';
+        header.style.marginBottom = '6px';
+
+        const title = document.createElement('div');
+        title.textContent = 'Table of Contents';
+        title.style.fontWeight = '600';
+        title.style.fontSize = '14px';
+
+        this.toggleButton = document.createElement('button');
+        this.toggleButton.textContent = 'Hide';
+        Object.assign(this.toggleButton.style, {
+            background: 'transparent',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            padding: '2px 8px',
+            cursor: 'pointer',
+            fontSize: '12px'
+        });
+        this.toggleButton.addEventListener('click', () => this.toggleVisibility());
+
+        header.appendChild(title);
+        header.appendChild(this.toggleButton);
+        this.container.appendChild(header);
+
         this.listEl = document.createElement('ul');
         Object.assign(this.listEl.style, {
             listStyle: 'none',
@@ -182,6 +211,12 @@ class TableOfContents {
         }
         this.container.appendChild(this.listEl);
         document.body.appendChild(this.container);
+    }
+
+    toggleVisibility() {
+        this.isTocVisible = !this.isTocVisible;
+        this.listEl.style.display = this.isTocVisible ? '' : 'none';
+        this.toggleButton.textContent = this.isTocVisible ? 'Hide' : 'Show';
     }
 
     setupIntersectionObserver() {
@@ -249,6 +284,7 @@ class TableOfContents {
         if (this.container && this.container.parentNode) this.container.parentNode.removeChild(this.container);
         this.headings = [];
         this.container = null;
+        this.toggleButton = null;
     }
 }
 
