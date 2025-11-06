@@ -124,8 +124,8 @@ class TableOfContents {
             position: 'fixed',
             top: this.offsetTop + 'px',
             right: '00px',
-            width: '200px',
-            maxHeight: '40vh',
+            width: '30vw',
+            maxHeight: '50vh',
             overflowY: 'auto',
             fontFamily: 'system-ui, sans-serif',
             fontSize: '13px',
@@ -258,9 +258,10 @@ class RandomParagraphTTS {
         this.button = null;
         this.continuousButton = null; // 🔁 button
         this.stopButton = null;       // ⏹ button
+        this.delayInput = null;
         this.continuousTimer = null;
         this.continuousActive = false;
-        this.continuousDelayMs = 0; // 25 seconds as requested
+        this.continuousDelay = 20; // X seconds as requested
         this.init();
     }
 
@@ -482,6 +483,27 @@ class RandomParagraphTTS {
 
     // ---------------- Continuous Mode ----------------
     createExtraButtons() {
+        // Delay input
+        this.delayInput = document.createElement('input');
+        this.delayInput.type = 'number';
+        this.delayInput.value = this.continuousDelay ;
+        this.delayInput.title = 'Set delay in seconds for continuous mode';
+        Object.assign(this.delayInput.style, {
+            width: '60px',
+            padding: '8px 6px',
+            border: '1px solid #ccc',
+            borderRadius: '8px',
+            fontSize: '14px',
+            textAlign: 'center',
+            marginRight: '5px'
+        });
+        this.delayInput.addEventListener('change', (e) => {
+            const seconds = parseInt(e.target.value, 10);
+            if (!isNaN(seconds) && seconds > 0) {
+                this.showToast(`Continuous delay set to ${seconds} seconds.`);
+            } 
+        });
+
         // Continuous (🔁)
         this.continuousButton = document.createElement('button');
         this.continuousButton.textContent = '🔁';
@@ -531,22 +553,20 @@ class RandomParagraphTTS {
     }
 
     attachExtraButtons(container) {
-        if (!this.continuousButton || !this.stopButton) this.createExtraButtons();
+        if (!this.delayInput || !this.continuousButton || !this.stopButton) this.createExtraButtons();
         if (container) {
             // Insert new buttons just before the main random button for intuitive grouping
-            // Container currently: [DarkMode, TTS]; we want [DarkMode, 🔁, ⏹, TTS]
-            const children = Array.from(container.children);
-            const ttsIndex = children.indexOf(this.button);
-            if (ttsIndex > -1) {
-                container.insertBefore(this.continuousButton, this.button);
-                container.insertBefore(this.stopButton, this.button);
-            } else {
-                container.appendChild(this.continuousButton);
-                container.appendChild(this.stopButton);
-            }
+            // Container will be [DarkMode, Delay, 🔁, ⏹, TTS]
+            const ttsIndex = Array.from(container.children).indexOf(this.button);
+            const anchor = (ttsIndex > -1) ? container.children[ttsIndex] : null;
+
+            container.insertBefore(this.delayInput, anchor);
+            container.insertBefore(this.continuousButton, anchor);
+            container.insertBefore(this.stopButton, anchor);
         } else {
             // Fallback: append to body positioned near the original button
             this.positionExtraButtonsFixed();
+            document.body.appendChild(this.delayInput);
             document.body.appendChild(this.continuousButton);
             document.body.appendChild(this.stopButton);
         }
@@ -555,13 +575,14 @@ class RandomParagraphTTS {
     positionExtraButtonsFixed() {
         // Stack horizontally leftwards of main button
         const base = { position: 'fixed', top: '20px', zIndex: '10000' };
+        Object.assign(this.delayInput.style, base, { right: '250px' });
         Object.assign(this.continuousButton.style, base, { right: '200px' });
         Object.assign(this.stopButton.style, base, { right: '150px' });
     }
 
     startContinuous() {
         this.continuousActive = true;
-        this.showToast('Continuous mode started: new random paragraph every 25s.');
+        this.showToast('Continuous mode started: new random paragraph every x seconds');
         // Start immediately, and the callback will schedule the next iteration.
         this.pickAndSpeakRandom(() => this.scheduleNextContinuous());
     }
@@ -573,7 +594,7 @@ class RandomParagraphTTS {
           this.continuousTimer = setTimeout(() => {
             if (!this.continuousActive) return;
             this.scheduleNextContinuous();
-        }, this.continuousDelayMs);
+        }, this.continuousDelay * 1000);
       });
     }
 
@@ -624,11 +645,13 @@ class RandomParagraphTTS {
         if (this.button && this.button.parentNode) {
             this.button.parentNode.removeChild(this.button);
         }
+        if (this.delayInput && this.delayInput.parentNode) this.delayInput.parentNode.removeChild(this.delayInput);
         if (this.continuousButton && this.continuousButton.parentNode) this.continuousButton.parentNode.removeChild(this.continuousButton);
         if (this.stopButton && this.stopButton.parentNode) this.stopButton.parentNode.removeChild(this.stopButton);
         this.stopContinuous();
         this.button = null;
         this.currentFocusedParagraph = null;
+        this.delayInput = null;
         this.continuousButton = null;
         this.stopButton = null;
     }
