@@ -26,7 +26,7 @@ def convert_markdown_to_html(input_file, output_file):
 <meta charset="utf-8">
 <title>{os.path.basename(input_file)}</title>
 <style>
-body {{ font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; }}
+body {{ font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; float: left; }}
 pre {{ background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }}
 code {{ background: #f4f4f4; padding: 2px 5px; border-radius: 3px; }}
 blockquote {{ border-left: 4px solid #ccc; margin: 0; padding-left: 10px; color: #666; }}
