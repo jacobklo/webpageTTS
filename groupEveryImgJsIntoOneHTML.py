@@ -2,6 +2,7 @@ import os
 import base64
 import mimetypes
 from urllib.parse import unquote
+from typing import List
 
 import requests
 from bs4 import BeautifulSoup
@@ -90,7 +91,7 @@ def fetch_resource(src, base_file_path):
 
     return content, mime
 
-def embed_images(html_file_path):
+def convert_to_soup(html_file_path):
     if not os.path.exists(html_file_path):
         print(f"Error: Input file not found: {html_file_path}")
         return
@@ -107,6 +108,10 @@ def embed_images(html_file_path):
         print(f"Failed to parse HTML file: {e}")
         return
 
+    return soup
+
+
+def embed_images(soup, html_file_path):
     count = 0
 
     # 1. Process <img> tags
@@ -163,16 +168,73 @@ def embed_images(html_file_path):
                 link['href'] = f"data:{mime};base64,{b64_data}"
                 count += 1
 
+    return soup
+
+
+def save_to_html(soup, output_file_path):
     # Save result
     try:
         with open(output_file_path, 'w', encoding='utf-8') as f:
             f.write(str(soup))
-        print(f"\nDone! Embedded {count} images.")
         print(f"Saved to: {output_file_path}")
     except Exception as e:
         print(f"Failed to save output: {e}")
 
+
+def embed_js_in_html(soup, html_file_path, js_file_path: List[str] = None):
+    """
+    Parses an HTML file, finds all <script src="..."> tags pointing to local files,
+    reads the content of those files, and embeds them directly into the HTML.
+    """
+
+    count = 0
+    script_tags = soup.find_all('script', src=True)
+
+    # Add addition JS files if provided
+    if js_file_path:
+        for js_path in js_file_path:
+            script_tag = soup.new_tag('script', src=js_path)
+            soup.body.append(script_tag)
+            script_tags.append(script_tag)
+
+    for script in script_tags:
+        src = script['src']
+        
+        # Skip remote scripts
+        if src.startswith(('http://', 'https://', '//')):
+            print(f"  [Skipping remote] {src}")
+            continue
+
+        # Resolve local path relative to the HTML file
+        html_dir = os.path.dirname(os.path.abspath(html_file_path))
+        js_path = os.path.join(html_dir, src)
+
+        if os.path.exists(js_path) and os.path.isfile(js_path):
+            try:
+                with open(js_path, 'r', encoding='utf-8') as js_file:
+                    js_content = js_file.read()
+                
+                # Remove the src attribute
+                del script['src']
+                # Embed the content
+                script.string = js_content
+                
+                print(f"  [Embedded] {src}")
+                count += 1
+            except Exception as e:
+                print(f"  [Error] Could not read {js_path}: {e}")
+        else:
+            print(f"  [Warning] File not found: {js_path}")
+
+    return soup
+
+
 if __name__ == "__main__":
 
-    input_file = "$100m Money Models Notes 25475e4e485880d68c9fe7176e3e68f5.html"
-    embed_images(input_file)
+    input_file = "Never Split the Difference Negotiating As If Your Life Depended On It - Chris Voss.html"  # Default input file
+    soup = convert_to_soup(input_file)
+    soup = embed_images(soup, input_file)
+    soup = embed_js_in_html(soup, input_file, js_file_path=['chrome-extension/content.js'])
+    base, ext = os.path.splitext(input_file)
+    output_file = f"{base}_embedded{ext}"
+    save_to_html(soup, output_file)
