@@ -413,13 +413,12 @@ class MyCustomButton {
 
 class RandomParagraphTTS {
     constructor() {
-        this.state = {
-            isContinuous: false,
-            delay: 20,
-            timer: null,
-            currentParagraph: null
-        };
-        
+        this.currentParagraphIdx = 0;
+        this.delay = 4;
+        this.isContinuous = true;
+        this.isRandom = false;
+        // Store all paragraphs for selection to speak later
+        this.paragraphs = Array.from(document.querySelectorAll('p')).filter(p => p.innerText.trim().length > 0);
         this.init();
     }
 
@@ -430,20 +429,26 @@ class RandomParagraphTTS {
             'tts-delay-input',
             'ext-tts-input',
             'Delay (seconds)',
-            this.state.delay,
+            this.delay,
             (e) => {
                 const val = parseInt(e.target.value, 10);
                 if (val > 0) {
-                    this.state.delay = val;
+                    this.delay = val;
                     TTSToast.show(`Delay set to ${val}s`);
                 }
             }
         );
 
         // Create Loop Button
-        MyCustomButton.createButtons('🔁', 'tts-loop-btn', 'Start Continuous Mode', { backgroundColor: '#34A853' }, () => {
-            if (this.state.isContinuous) TTSToast.show('Already in continuous mode');
-            else this.startContinuous();
+        MyCustomButton.createButtons('▶️', 'tts-play-btn', 'Start Continuous Mode', { backgroundColor: '#34A853' }, () => {
+            TTSToast.show('Play');
+            this.play();
+        });
+
+        // Create a toggle random button
+        MyCustomButton.createButtons('🔀', 'tts-random-btn', 'Start Random Mode', { backgroundColor: '#FBBC05' }, () => {
+            TTSToast.show('Random ');
+            this.isRandom = !this.isRandom;
         });
 
         // Create Stop Button
@@ -467,59 +472,38 @@ class RandomParagraphTTS {
 
     // --- Core Logic ---
 
-    playSingle(onComplete) {
-        this.stopSpeech(); // Stop any current speech
-        this.clearHighlight();
-
-        const paragraphs = Array.from(document.querySelectorAll('p')).filter(p => p.innerText.trim().length > 0);
-        if (!paragraphs.length) {
-            console.log('No paragraphs found.');
-            if (onComplete) onComplete();
-            return;
+    play() {
+        let nextParagraphIdx;
+        if (this.isRandom) {
+            nextParagraphIdx = Math.floor(Math.random() * this.paragraphs.length);
+        } else {
+            nextParagraphIdx = this.currentParagraphIdx + 1;
         }
-
-        const randomP = paragraphs[Math.floor(Math.random() * paragraphs.length)];
-        this.highlightParagraph(randomP);
-        this.speak(randomP.innerText, onComplete);
-    }
-
-    startContinuous() {
-        this.state.isContinuous = true;
-        TTSToast.show('Continuous mode started');
-        this.loop();
-    }
-
-    loop() {
-        if (!this.state.isContinuous) return;
-        
-        this.playSingle(() => {
-            if (!this.state.isContinuous) return;
-            this.state.timer = setTimeout(() => {
-                this.loop();
-            }, this.state.delay * 1000);
+        this.highlightParagraph(nextParagraphIdx);
+        this.speak(this.paragraphs[nextParagraphIdx].innerText, () => {
+            this.clearHighlight(this.currentParagraphIdx);
+            if (this.isContinuous) {
+              this.currentParagraphIdx = nextParagraphIdx;
+              setTimeout(() => this.play(), this.delay * 1000);
+            }
         });
     }
 
     stopAll() {
-        this.state.isContinuous = false;
-        if (this.state.timer) clearTimeout(this.state.timer);
+        this.isContinuous = false;
         this.stopSpeech();
         this.clearHighlight();
     }
 
     // --- Speech & Visuals ---
 
-    highlightParagraph(p) {
-        this.state.currentParagraph = p;
-        p.classList.add('ext-tts-highlight');
-        p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    highlightParagraph(paragraphIdx) {
+        this.paragraphs[paragraphIdx].classList.add('ext-tts-highlight');
+        this.paragraphs[paragraphIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    clearHighlight() {
-        if (this.state.currentParagraph) {
-            this.state.currentParagraph.classList.remove('ext-tts-highlight');
-            this.state.currentParagraph = null;
-        }
+    clearHighlight(paragraphIdx) {
+        this.paragraphs[paragraphIdx].classList.remove('ext-tts-highlight');
     }
 
     stopSpeech() {
@@ -529,7 +513,6 @@ class RandomParagraphTTS {
     speak(text, onEnd) {
         if (!('speechSynthesis' in window)) {
             console.warn("No speech synthesis");
-            if (onEnd) onEnd();
             return;
         }
 
@@ -538,7 +521,7 @@ class RandomParagraphTTS {
         let index = 0;
 
         const speakNext = () => {
-            if (index >= chunks.length || !this.state.currentParagraph) { // Stop if paragraph cleared
+            if (index >= chunks.length) { // Stop if paragraph cleared
                 if (onEnd) onEnd();
                 return;
             }
@@ -552,7 +535,7 @@ class RandomParagraphTTS {
 
     destroy() {
         this.stopAll();
-        ['tts-loop-btn', 'tts-stop-btn'].forEach(id => {
+        ['tts-play-btn', 'tts-stop-btn', 'tts-random-btn'].forEach(id => {
             MyCustomButton.removeButton(id);
         });
         document.getElementById('tts-delay-input')?.remove();
