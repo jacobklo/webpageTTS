@@ -288,475 +288,292 @@ class TableOfContents {
     }
 }
 
+
+class TTSToast {
+
+    static show(message) {
+
+        let toast = document.createElement('div');
+        toast.id = 'ext-tts-toast';
+        toast.className = 'ext-tts-toast';
+        Object.assign(toast.style, {
+          position: 'fixed',
+          top: '70px',
+          right: '20px',
+          maxWidth: '260px',
+          background: 'rgba(0,0,0,0.85)',
+          color: '#fff',
+          padding: '8px 12px',
+          borderRadius: '6px',
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '13px',
+          zIndex: '10001',
+          opacity: '1',
+          transition: 'opacity 0.25s',
+          pointerEvents: 'none'
+        });
+        document.body.appendChild(toast);
+        
+        toast.textContent = message;
+        requestAnimationFrame(() => toast.classList.add('visible'));
+        
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 3000);
+    }
+}
+
+class MyCustomButton {
+  static containerId = 'ext-buttons-container';
+
+  static ensureContainer() {
+    if (!document.getElementById(MyCustomButton.containerId)) {
+      const container = document.createElement('div');
+      container.id = MyCustomButton.containerId;
+      Object.assign(container.style, {
+        position: 'fixed',
+        top: '20px',
+        right: '20px',
+        display: 'flex',
+        flexDirection: 'row',
+        gap: '10px',
+        zIndex: '10000'
+      });
+      document.body.appendChild(container);
+    }
+  }
+
+  static createInput(inputIdName, className, title, defaultValue, onChangeCallback) {
+    MyCustomButton.ensureContainer();
+    const container = document.getElementById(MyCustomButton.containerId);
+    if (document.getElementById(inputIdName)) return;
+
+    const input = document.createElement('input');
+    input.id = inputIdName;
+    input.type = 'number';
+    input.value = defaultValue;
+    input.className = className;
+    input.title = title;
+    Object.assign(input.style, {
+      width: '50px',
+      padding: '8px',
+      border: '1px solid #ccc',
+      borderRadius: '8px',
+      textAlign: 'center',
+      marginRight: '5px',
+      fontFamily: 'system-ui, sans-serif',
+      zIndex: '10000'
+    });
+    input.onchange = onChangeCallback
+    if (container) container.appendChild(input);
+  }
+
+  static createButtons(buttonText, buttonIdName, title, customStyle, onClickCallback) {
+    MyCustomButton.ensureContainer();
+    const container = document.getElementById(MyCustomButton.containerId);
+    if (document.getElementById(buttonIdName)) return;
+
+    const btn = document.createElement('button');
+    btn.id = buttonIdName;
+    btn.textContent = buttonText;
+    Object.assign(btn.style, {
+      padding: '10px 15px',
+      cursor: 'pointer',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+      fontSize: '14px',
+      lineHeight: '1',
+      fontFamily: 'system-ui, sans-serif',
+      backgroundColor: '#444',
+      transition: 'filter 0.2s',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    });
+    if (customStyle && typeof customStyle === 'object') {
+      Object.assign(btn.style, customStyle);
+    }
+    btn.title = title || '';
+    btn.onmouseover = () => btn.style.filter = 'brightness(0.9)';
+    btn.onmouseout = () => btn.style.filter = 'brightness(1)';
+    
+    btn.addEventListener('click', onClickCallback);
+    container.appendChild(btn);
+  }
+  
+  static removeButton(buttonIdName) {
+    const btn = document.getElementById(buttonIdName);
+    if (btn && btn.parentNode) {
+      btn.parentNode.removeChild(btn);
+    }
+  }
+}
+
 class RandomParagraphTTS {
     constructor() {
-        this.currentFocusedParagraph = null;
-        this.button = null;
-        this.continuousButton = null; // 🔁 button
-        this.stopButton = null;       // ⏹ button
-        this.delayInput = null;
-        this.continuousTimer = null;
-        this.continuousActive = false;
-        this.continuousDelay = 20; // X seconds as requested
+        this.state = {
+            isContinuous: false,
+            delay: 20,
+            timer: null,
+            currentParagraph: null
+        };
+        
         this.init();
     }
 
     init() {
-        this.createButton();
-        this.setupButtonEvents();
-        this.appendButton();
-    }
 
-    createButton() {
-        this.button = document.createElement('button');
-        this.button.textContent = '🔊';
-        
-        // Style the button to be on the top right
-        Object.assign(this.button.style, {
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: '10000',
-            padding: '10px 15px',
-            cursor: 'pointer',
-            backgroundColor: '#4285F4',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            fontSize: '32px',
-            lineHeight: '1',
-        });
-    }
-
-    setupButtonEvents() {
-        // Add hover effect
-        this.button.onmouseover = () => {
-            this.button.style.backgroundColor = '#357ae8';
-        };
-        this.button.onmouseout = () => {
-            this.button.style.backgroundColor = '#4285F4';
-        };
-
-        // Add click event listener
-        this.button.addEventListener('click', () => this.handleButtonClick());
-    }
-
-    appendButton() {
-        document.body.appendChild(this.button);
-    }
-
-    handleButtonClick() {
-        this.pickAndSpeakRandom();
-        startVideoKeepAwake();
-    }
-
-    pickAndSpeakRandom(callback) {
-        const paragraphs = document.querySelectorAll('p');
-        if (!paragraphs.length) {
-            console.log('No <p> tags found on this page.');
-            if (callback) callback();
-            return;
-        }
-        this.removeParagraphFocus();
-        const randomIndex = Math.floor(Math.random() * paragraphs.length);
-        const randomParagraph = paragraphs[randomIndex];
-        const textToSpeak = randomParagraph?.innerText || '';
-        this.focusOnParagraph(randomParagraph);
-        if (textToSpeak && textToSpeak.trim().length > 0) {
-            this.speakText(textToSpeak.trim(), callback);
-        } else {
-            console.log('Selected paragraph is empty.');
-            if (callback) callback();
-        }
-    }
-
-    focusOnParagraph(paragraph) {
-        // Store reference to currently focused paragraph
-        this.currentFocusedParagraph = paragraph;
-        
-        // Add visual styling to highlight the paragraph
-        const originalStyle = {
-            outline: paragraph.style.outline,
-            boxShadow: paragraph.style.boxShadow,
-            backgroundColor: paragraph.style.backgroundColor,
-            padding: paragraph.style.padding,
-            transition: paragraph.style.transition
-        };
-        
-        // Store original styles for restoration later
-        paragraph.dataset.originalOutline = originalStyle.outline;
-        paragraph.dataset.originalBoxShadow = originalStyle.boxShadow;
-        paragraph.dataset.originalBackgroundColor = originalStyle.backgroundColor;
-        paragraph.dataset.originalPadding = originalStyle.padding;
-        paragraph.dataset.originalTransition = originalStyle.transition;
-        
-        // Apply focus styling
-        Object.assign(paragraph.style, {
-            outline: '3px solid #4285F4',
-            boxShadow: '0 0 15px rgba(66, 133, 244, 0.3)',
-            backgroundColor: 'rgba(66, 133, 244, 0.05)',
-            padding: paragraph.style.padding || '10px',
-            transition: 'all 0.3s ease-in-out'
-        });
-        
-        // Scroll to the paragraph smoothly
-        paragraph.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest'
-        });
-    }
-
-    removeParagraphFocus() {
-        if (this.currentFocusedParagraph) {
-            // Restore original styles
-            this.currentFocusedParagraph.style.outline = this.currentFocusedParagraph.dataset.originalOutline || '';
-            this.currentFocusedParagraph.style.boxShadow = this.currentFocusedParagraph.dataset.originalBoxShadow || '';
-            this.currentFocusedParagraph.style.backgroundColor = this.currentFocusedParagraph.dataset.originalBackgroundColor || '';
-            this.currentFocusedParagraph.style.padding = this.currentFocusedParagraph.dataset.originalPadding || '';
-            this.currentFocusedParagraph.style.transition = this.currentFocusedParagraph.dataset.originalTransition || '';
-            
-            // Clean up data attributes
-            delete this.currentFocusedParagraph.dataset.originalOutline;
-            delete this.currentFocusedParagraph.dataset.originalBoxShadow;
-            delete this.currentFocusedParagraph.dataset.originalBackgroundColor;
-            delete this.currentFocusedParagraph.dataset.originalPadding;
-            delete this.currentFocusedParagraph.dataset.originalTransition;
-            
-            this.currentFocusedParagraph = null;
-        }
-    }
-
-    speakText(fullText, callback) {
-        if ('speechSynthesis' in window) {
-            // Cancel any ongoing speech
-            window.speechSynthesis.cancel();
-
-            // Optionally chunk very long text for better control
-            const maxChunk = 800; // safe chunk size
-            const chunks = this.chunkText(fullText, maxChunk);
-
-            this.speakChunks(chunks, 0, callback);
-        } else if (chrome?.tts) {
-            chrome.tts.speak(fullText, {
-                lang: 'en-US',
-                rate: 1,
-                onEvent: (event) => {
-                    if (event.type === 'end' || event.type === 'interrupted' || event.type === 'error') {
-                        if (callback) callback();
-                    }
+        // Create Delay Input
+        MyCustomButton.createInput(
+            'tts-delay-input',
+            'ext-tts-input',
+            'Delay (seconds)',
+            this.state.delay,
+            (e) => {
+                const val = parseInt(e.target.value, 10);
+                if (val > 0) {
+                    this.state.delay = val;
+                    TTSToast.show(`Delay set to ${val}s`);
                 }
-            });
-        } else {
-            console.warn("No speech synthesis available.");
-            if (callback) callback();
-        }
+            }
+        );
+
+        // Create Loop Button
+        MyCustomButton.createButtons('🔁', 'tts-loop-btn', 'Start Continuous Mode', { backgroundColor: '#34A853' }, () => {
+            if (this.state.isContinuous) TTSToast.show('Already in continuous mode');
+            else this.startContinuous();
+        });
+
+        // Create Stop Button
+        MyCustomButton.createButtons('⏹', 'tts-stop-btn', 'Stop', { backgroundColor: '#EA4335' }, () => {
+            this.stopAll();
+            TTSToast.show('Stopped');
+        });
+
+        //Add highlight paragraph styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .ext-tts-highlight {
+                outline: 3px solid #4285F4 !important;
+                box-shadow: 0 0 15px rgba(66, 133, 244, 0.3) !important;
+                background-color: rgba(66, 133, 244, 0.05) !important;
+                transition: all 0.3s ease-in-out;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
-    chunkText(text, maxChunk) {
-        const chunks = [];
-        let remaining = text;
-        
-        while (remaining.length > 0) {
-            let slice = remaining.slice(0, maxChunk);
-            // Try to cut at sentence end
-            const lastPunct = slice.lastIndexOf('. ');
-            if (lastPunct > 120) slice = slice.slice(0, lastPunct + 1);
-            chunks.push(slice);
-            remaining = remaining.slice(slice.length).trimStart();
-        }
-        
-        return chunks;
-    }
+    // --- Core Logic ---
 
-    speakChunks(chunks, index, callback) {
-        if (index >= chunks.length) {
-            if (callback) callback();
+    playSingle(onComplete) {
+        this.stopSpeech(); // Stop any current speech
+        this.clearHighlight();
+
+        const paragraphs = Array.from(document.querySelectorAll('p')).filter(p => p.innerText.trim().length > 0);
+        if (!paragraphs.length) {
+            console.log('No paragraphs found.');
+            if (onComplete) onComplete();
             return;
         }
-        
-        const utterance = new SpeechSynthesisUtterance(chunks[index]);
-        utterance.lang = 'en-US';
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        utterance.onend = () => this.speakChunks(chunks, index + 1, callback);
-        utterance.onerror = (e) => {
-            console.warn("Speech error", e);
-            this.speakChunks(chunks, index + 1, callback);
-        };
-        
-        window.speechSynthesis.speak(utterance);
-    }
 
-    async playViaGoogle(text) {
-        const base = 'https://translate.google.com/translate_tts';
-        const url = `${base}?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(text)}&tl=en`;
-        
-        try {
-            const resp = await fetch(url);
-            if (!resp.ok) { 
-                console.error("TTS fetch failed", resp.status); 
-                return; 
-            }
-            
-            const blob = await resp.blob();
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = () => URL.revokeObjectURL(audio.src);
-            audio.onerror = () => console.error("Audio element error", audio.error);
-            audio.play();
-        } catch (error) {
-            console.error("Error playing via Google TTS:", error);
-        }
-    }
-
-    // Public method to stop current speech
-    stopSpeech() {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-        }
-    }
-
-    // ---------------- Continuous Mode ----------------
-    createExtraButtons() {
-        // Delay input
-        this.delayInput = document.createElement('input');
-        this.delayInput.type = 'number';
-        this.delayInput.value = this.continuousDelay ;
-        this.delayInput.title = 'Set delay in seconds for continuous mode';
-        Object.assign(this.delayInput.style, {
-            width: '60px',
-            padding: '8px 6px',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            fontSize: '14px',
-            textAlign: 'center',
-            marginRight: '5px'
-        });
-        this.delayInput.addEventListener('change', (e) => {
-            const seconds = parseInt(e.target.value, 10);
-            if (!isNaN(seconds) && seconds > 0) {
-                this.showToast(`Continuous delay set to ${seconds} seconds.`);
-            } 
-        });
-
-        // Continuous (🔁)
-        this.continuousButton = document.createElement('button');
-        this.continuousButton.textContent = '🔁';
-        Object.assign(this.continuousButton.style, {
-            padding: '8px 10px',
-            cursor: 'pointer',
-            backgroundColor: '#34A853',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            fontSize: '22px',
-            lineHeight: '1'
-        });
-        this.continuousButton.title = 'Start continuous random paragraph reading';
-        this.continuousButton.addEventListener('click', () => {
-            if (this.continuousActive) {
-                this.showToast('Continuous mode already running.');
-            } else {
-                this.startContinuous();
-            }
-        });
-        this.continuousButton.onmouseover = () => this.continuousButton.style.backgroundColor = '#2d8f47';
-        this.continuousButton.onmouseout = () => this.continuousButton.style.backgroundColor = '#34A853';
-
-        // Stop (⏹)
-        this.stopButton = document.createElement('button');
-        this.stopButton.textContent = '⏹';
-        Object.assign(this.stopButton.style, {
-            padding: '8px 10px',
-            cursor: 'pointer',
-            backgroundColor: '#EA4335',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            fontSize: '22px',
-            lineHeight: '1'
-        });
-        this.stopButton.title = 'Stop continuous mode and current speech';
-        this.stopButton.addEventListener('click', () => {
-            this.stopContinuous();
-            this.showToast('Stopped continuous reading.');
-        });
-        this.stopButton.onmouseover = () => this.stopButton.style.backgroundColor = '#c7362b';
-        this.stopButton.onmouseout = () => this.stopButton.style.backgroundColor = '#EA4335';
-    }
-
-    attachExtraButtons(container) {
-        if (!this.delayInput || !this.continuousButton || !this.stopButton) this.createExtraButtons();
-        if (container) {
-            // Insert new buttons just before the main random button for intuitive grouping
-            // Container will be [DarkMode, Delay, 🔁, ⏹, TTS]
-            const ttsIndex = Array.from(container.children).indexOf(this.button);
-            const anchor = (ttsIndex > -1) ? container.children[ttsIndex] : null;
-
-            container.insertBefore(this.delayInput, anchor);
-            container.insertBefore(this.continuousButton, anchor);
-            container.insertBefore(this.stopButton, anchor);
-        } else {
-            // Fallback: append to body positioned near the original button
-            this.positionExtraButtonsFixed();
-            document.body.appendChild(this.delayInput);
-            document.body.appendChild(this.continuousButton);
-            document.body.appendChild(this.stopButton);
-        }
-    }
-
-    positionExtraButtonsFixed() {
-        // Stack horizontally leftwards of main button
-        const base = { position: 'fixed', top: '20px', zIndex: '10000' };
-        Object.assign(this.delayInput.style, base, { right: '250px' });
-        Object.assign(this.continuousButton.style, base, { right: '200px' });
-        Object.assign(this.stopButton.style, base, { right: '150px' });
+        const randomP = paragraphs[Math.floor(Math.random() * paragraphs.length)];
+        this.highlightParagraph(randomP);
+        this.speak(randomP.innerText, onComplete);
     }
 
     startContinuous() {
-        this.continuousActive = true;
-        this.showToast('Continuous mode started: new random paragraph every x seconds');
-        // Start immediately, and the callback will schedule the next iteration.
-        this.pickAndSpeakRandom(() => this.scheduleNextContinuous());
+        this.state.isContinuous = true;
+        TTSToast.show('Continuous mode started');
+        this.loop();
     }
 
-    scheduleNextContinuous() {
-        if (!this.continuousActive) return;
-        clearTimeout(this.continuousTimer);
-        this.pickAndSpeakRandom(() => {
-          this.continuousTimer = setTimeout(() => {
-            if (!this.continuousActive) return;
-            this.scheduleNextContinuous();
-        }, this.continuousDelay * 1000);
-      });
-    }
-
-    stopContinuous() {
-        this.continuousActive = false;
-        clearTimeout(this.continuousTimer);
-        this.continuousTimer = null;
-        this.stopSpeech();
-    }
-
-    // Toast utility
-    showToast(message) {
-        // Remove existing toast if present
-        const existing = document.getElementById('ext-tts-toast');
-        if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
-        const toast = document.createElement('div');
-        toast.id = 'ext-tts-toast';
-        toast.textContent = message;
-        Object.assign(toast.style, {
-            position: 'fixed',
-            top: '70px',
-            right: '20px',
-            maxWidth: '260px',
-            background: 'rgba(0,0,0,0.85)',
-            color: '#fff',
-            padding: '8px 12px',
-            borderRadius: '6px',
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: '13px',
-            lineHeight: '1.3',
-            zIndex: '10000',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            opacity: '0',
-            transition: 'opacity 0.25s'
+    loop() {
+        if (!this.state.isContinuous) return;
+        
+        this.playSingle(() => {
+            if (!this.state.isContinuous) return;
+            this.state.timer = setTimeout(() => {
+                this.loop();
+            }, this.state.delay * 1000);
         });
-        document.body.appendChild(toast);
-        requestAnimationFrame(() => toast.style.opacity = '1');
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => toast.parentNode && toast.parentNode.removeChild(toast), 400);
-        }, 3200);
     }
 
-    // Public method to destroy the TTS instance
-    destroy() {
+    stopAll() {
+        this.state.isContinuous = false;
+        if (this.state.timer) clearTimeout(this.state.timer);
         this.stopSpeech();
-        this.removeParagraphFocus();
-        if (this.button && this.button.parentNode) {
-            this.button.parentNode.removeChild(this.button);
+        this.clearHighlight();
+    }
+
+    // --- Speech & Visuals ---
+
+    highlightParagraph(p) {
+        this.state.currentParagraph = p;
+        p.classList.add('ext-tts-highlight');
+        p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    clearHighlight() {
+        if (this.state.currentParagraph) {
+            this.state.currentParagraph.classList.remove('ext-tts-highlight');
+            this.state.currentParagraph = null;
         }
-        if (this.delayInput && this.delayInput.parentNode) this.delayInput.parentNode.removeChild(this.delayInput);
-        if (this.continuousButton && this.continuousButton.parentNode) this.continuousButton.parentNode.removeChild(this.continuousButton);
-        if (this.stopButton && this.stopButton.parentNode) this.stopButton.parentNode.removeChild(this.stopButton);
-        this.stopContinuous();
-        this.button = null;
-        this.currentFocusedParagraph = null;
-        this.delayInput = null;
-        this.continuousButton = null;
-        this.stopButton = null;
+    }
+
+    stopSpeech() {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    }
+
+    speak(text, onEnd) {
+        if (!('speechSynthesis' in window)) {
+            console.warn("No speech synthesis");
+            if (onEnd) onEnd();
+            return;
+        }
+
+        // Simple chunking for long text
+        const chunks = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+        let index = 0;
+
+        const speakNext = () => {
+            if (index >= chunks.length || !this.state.currentParagraph) { // Stop if paragraph cleared
+                if (onEnd) onEnd();
+                return;
+            }
+            const u = new SpeechSynthesisUtterance(chunks[index++]);
+            u.onend = speakNext;
+            u.onerror = (e) => { console.warn(e); speakNext(); };
+            window.speechSynthesis.speak(u);
+        };
+        speakNext();
+    }
+
+    destroy() {
+        this.stopAll();
+        ['tts-loop-btn', 'tts-stop-btn'].forEach(id => {
+            MyCustomButton.removeButton(id);
+        });
+        document.getElementById('tts-delay-input')?.remove();
     }
 }
 
+
 class DarkModeFunctionality {
-    constructor(ttsButton) {
-        this.ttsButton = ttsButton;
-        this.button = null;
-        this.container = null;
+    constructor() {
         this.isDark = false;
         this.styleEl = null;
-        if (this.ttsButton) {
-            this.init();
-        }
+        this.init();
     }
 
     init() {
-        this.ensureContainer();
-        this.createButton();
-        this.placeButtons();
+        MyCustomButton.createButtons('🌓 Dark', 'dark-mode-btn', 'Toggle Dark Mode', { backgroundColor: '#222' }, () => this.toggle());
         this.loadPreference();
     }
 
-    ensureContainer() {
-        // Create a flex container to hold both buttons (dark mode on left, TTS on right)
-        this.container = document.createElement('div');
-        Object.assign(this.container.style, {
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            display: 'flex',
-            flexDirection: 'row',
-            gap: '10px',
-            zIndex: '10000'
-        });
-        // Adjust the existing TTS button so it behaves inside a flex container
-        Object.assign(this.ttsButton.style, {
-            position: 'static',
-            top: '',
-            right: ''
-        });
-    }
-
-    createButton() {
-        this.button = document.createElement('button');
-        this.button.textContent = '🌓 Dark';
-        Object.assign(this.button.style, {
-            padding: '10px 15px',
-            cursor: 'pointer',
-            backgroundColor: '#222',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            fontSize: '14px',
-            lineHeight: '1'
-        });
-        this.button.title = 'Toggle dark mode';
-        this.button.onmouseover = () => { this.button.style.backgroundColor = '#333'; };
-        this.button.onmouseout = () => { this.button.style.backgroundColor = '#222'; };
-        this.button.addEventListener('click', () => this.toggle());
-    }
-
-    placeButtons() {
-        // Append dark mode button first (left), then existing TTS button (right)
-        this.container.appendChild(this.button);
-        this.container.appendChild(this.ttsButton);
-        document.body.appendChild(this.container);
+    get button() {
+        return document.getElementById('dark-mode-btn');
     }
 
     toggle() {
@@ -788,36 +605,31 @@ class DarkModeFunctionality {
         if (!document.getElementById(this.styleEl.id)) {
             document.head.appendChild(this.styleEl);
         }
-        this.button.textContent = '🌞 Light';
-        this.button.style.backgroundColor = '#444';
+        const btn = this.button;
+        if (btn) {
+            btn.textContent = '🌞 Light';
+            btn.style.backgroundColor = '#444';
+        }
     }
 
     removeDark() {
         if (this.styleEl && this.styleEl.parentNode) {
             this.styleEl.parentNode.removeChild(this.styleEl);
         }
-        this.button.textContent = '🌓 Dark';
-        this.button.style.backgroundColor = '#222';
+        const btn = this.button;
+        if (btn) {
+            btn.textContent = '🌓 Dark';
+            btn.style.backgroundColor = '#222';
+        }
     }
 
     destroy() {
-        if (this.button && this.button.parentNode) this.button.parentNode.removeChild(this.button);
+        MyCustomButton.removeButton('dark-mode-btn');
         if (this.styleEl && this.styleEl.parentNode) this.styleEl.parentNode.removeChild(this.styleEl);
-        // Move TTS button back to body with original positioning if desired
-        if (this.ttsButton && this.ttsButton.parentNode === this.container) {
-            document.body.appendChild(this.ttsButton);
-            Object.assign(this.ttsButton.style, {
-                position: 'fixed',
-                top: '20px',
-                right: '20px'
-            });
-        }
-        if (this.container && this.container.parentNode) this.container.parentNode.removeChild(this.container);
-        this.button = null;
-        this.container = null;
         this.styleEl = null;
     }
 }
+
 
 
 function startVideoKeepAwake() {
