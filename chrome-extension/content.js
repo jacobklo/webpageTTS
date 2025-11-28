@@ -274,6 +274,18 @@ class TableOfContents {
             { backgroundColor: 'rgba(255,235,59,0.8)' },
             { backgroundColor: 'transparent' }
         ], { duration: 1000, easing: 'ease-out' });
+
+        // Sync TTS position to the first paragraph following this heading
+        if (typeof ttsInstance !== 'undefined' && ttsInstance.paragraphs) {
+            // Find the first paragraph that appears after the heading in the DOM
+            const idx = ttsInstance.paragraphs.findIndex(p => 
+                (h.el.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING)
+            );
+            
+            if (idx !== -1) {
+                ttsInstance.currentParagraphIdx = idx;
+            }
+        }
     }
 
     destroy() {
@@ -411,7 +423,7 @@ class MyCustomButton {
   }
 }
 
-class RandomParagraphTTS {
+class ReadParagraphTTS {
     constructor() {
         this.currentParagraphIdx = 0;
         this.delay = 4;
@@ -447,7 +459,7 @@ class RandomParagraphTTS {
 
         // Create a toggle random button
         MyCustomButton.createButtons('🔀', 'tts-random-btn', 'Start Random Mode', { backgroundColor: '#FBBC05' }, () => {
-            TTSToast.show('Random ');
+            TTSToast.show('Random is ' + (this.isRandom ? 'Off' : 'On'));
             this.isRandom = !this.isRandom;
         });
 
@@ -479,11 +491,13 @@ class RandomParagraphTTS {
         } else {
             nextParagraphIdx = this.currentParagraphIdx + 1;
         }
-        this.highlightParagraph(nextParagraphIdx);
-        this.speak(this.paragraphs[nextParagraphIdx].innerText, () => {
-            this.clearHighlight(this.currentParagraphIdx);
+        let pastParagraphIdx = this.currentParagraphIdx;
+        this.currentParagraphIdx = nextParagraphIdx;
+
+        this.highlightParagraph(pastParagraphIdx);
+        this.speak(this.paragraphs[pastParagraphIdx].innerText, () => {
+            this.clearHighlight(pastParagraphIdx);
             if (this.isContinuous) {
-              this.currentParagraphIdx = nextParagraphIdx;
               setTimeout(() => this.play(), this.delay * 1000);
             }
         });
@@ -492,7 +506,7 @@ class RandomParagraphTTS {
     stopAll() {
         this.isContinuous = false;
         this.stopSpeech();
-        this.clearHighlight();
+        this.clearHighlight(this.currentParagraphIdx);
     }
 
     // --- Speech & Visuals ---
@@ -643,7 +657,7 @@ function stopVideoKeepAwake() {
 }
 
 // Initialize the TTS functionality
-const ttsInstance = new RandomParagraphTTS();
+const ttsInstance = new ReadParagraphTTS();
 // Initialize Dark Mode (button placed to the left of TTS button)
 const darkModeInstance = new DarkModeFunctionality(ttsInstance.button);
 // Initialize Table of Contents (positioned beneath buttons)
