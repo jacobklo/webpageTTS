@@ -14,7 +14,6 @@ class TableOfContents {
     constructor(options = {}) {
         this.article = options.article || document.querySelector('article') || document.body;
         this.offsetTop = options.offsetTop || 80; // leave room for existing buttons at 20px
-        this.maxItems = options.maxItems || 500; // safety cap
         this.container = null;
         this.listEl = null;
         this.toggleButton = null;
@@ -40,7 +39,7 @@ class TableOfContents {
         const standard = Array.from(this.article.querySelectorAll(selector));
         // Custom headers: <summary> elements directly inside <details> within the article hierarchy
         const custom = Array.from(this.article.querySelectorAll('details > summary'));
-        const all = [...standard, ...custom].slice(0, this.maxItems);
+        const all = [...standard, ...custom];
         const used = new Set();
 
         this.headings = all.map(el => {
@@ -122,25 +121,33 @@ class TableOfContents {
     render() {
         this.container = document.createElement('nav');
         this.container.id = 'ext-toc-container';
+        
+        // Layout as a right-side column
+        const width = '30vw';
+
         Object.assign(this.container.style, {
             position: 'fixed',
             top: this.offsetTop + 'px',
-            right: '00px',
-            width: '30vw',
-            maxHeight: '50vh',
+            right: '0',
+            width: width,
+            height: `calc(100vh - ${this.offsetTop}px)`,
             overflowY: 'auto',
             fontFamily: 'system-ui, sans-serif',
             fontSize: '13px',
             lineHeight: '1.4',
-            background: 'rgba(255,255,255,0.95)',
+            background: 'rgba(255,255,255,0.98)',
             backdropFilter: 'blur(4px)',
             color: '#222',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
+            borderLeft: '1px solid #ccc',
             padding: '10px 10px 14px 10px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            zIndex: '10000'
+            boxShadow: '-2px 0 12px rgba(0,0,0,0.1)',
+            zIndex: '10000',
+            boxSizing: 'border-box'
         });
+
+        // Shift body content to create "left column"
+        document.body.style.transition = 'margin-right 0.3s ease';
+        document.body.style.marginRight = width;
 
         const header = document.createElement('div');
         header.style.display = 'flex';
@@ -215,8 +222,33 @@ class TableOfContents {
 
     toggleVisibility() {
         this.isTocVisible = !this.isTocVisible;
-        this.listEl.style.display = this.isTocVisible ? '' : 'none';
-        this.toggleButton.textContent = this.isTocVisible ? 'Hide' : 'Show';
+        
+        if (this.isTocVisible) {
+            this.listEl.style.display = '';
+            this.container.style.width = '30vw';
+            this.container.style.background = 'rgba(255,255,255,0.98)';
+            this.container.style.borderLeft = '1px solid #ccc';
+            this.container.style.boxShadow = '-2px 0 12px rgba(0,0,0,0.1)';
+            document.body.style.marginRight = '30vw';
+            this.toggleButton.textContent = 'Hide';
+            // Show title
+            if(this.container.firstChild && this.container.firstChild.firstChild) {
+                 this.container.firstChild.firstChild.style.display = '';
+            }
+        } else {
+            this.listEl.style.display = 'none';
+            // Collapse to a small button
+            this.container.style.width = 'auto';
+            this.container.style.background = 'transparent';
+            this.container.style.borderLeft = 'none';
+            this.container.style.boxShadow = 'none';
+            document.body.style.marginRight = '0';
+            this.toggleButton.textContent = 'Show';
+            // Hide title
+            if(this.container.firstChild && this.container.firstChild.firstChild) {
+                 this.container.firstChild.firstChild.style.display = 'none';
+            }
+        }
     }
 
     setupIntersectionObserver() {
@@ -294,6 +326,10 @@ class TableOfContents {
             this.observer.disconnect();
         }
         if (this.container && this.container.parentNode) this.container.parentNode.removeChild(this.container);
+        
+        // Reset body margin
+        document.body.style.marginRight = '';
+
         this.headings = [];
         this.container = null;
         this.toggleButton = null;
@@ -426,7 +462,7 @@ class MyCustomButton {
 class ReadParagraphTTS {
     constructor() {
         this.currentParagraphIdx = 0;
-        this.delay = 4;
+        this.delay = 20;
         this.isContinuous = true;
         this.isRandom = false;
         // Store all paragraphs for selection to speak later
