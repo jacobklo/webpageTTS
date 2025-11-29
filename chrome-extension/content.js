@@ -37,6 +37,7 @@ class TableOfContents {
         // Standard headings
         const selector = 'h1, h2, h3, h4, h5, h6';
         const standard = Array.from(this.article.querySelectorAll(selector));
+        console.log(`Found ${standard.length} standard headings`);
         // Custom headers: <summary> elements directly inside <details> within the article hierarchy
         const custom = Array.from(this.article.querySelectorAll('details > summary'));
         const all = [...standard, ...custom];
@@ -308,14 +309,14 @@ class TableOfContents {
         ], { duration: 1000, easing: 'ease-out' });
 
         // Sync TTS position to the first paragraph following this heading
-        if (typeof ttsInstance !== 'undefined' && ttsInstance.paragraphs) {
+        if (typeof window.ttsInstance !== 'undefined' && window.ttsInstance.paragraphs) {
             // Find the first paragraph that appears after the heading in the DOM
-            const idx = ttsInstance.paragraphs.findIndex(p => 
+            const idx = window.ttsInstance.paragraphs.findIndex(p => 
                 (h.el.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING)
             );
             
             if (idx !== -1) {
-                ttsInstance.currentParagraphIdx = idx;
+                window.ttsInstance.currentParagraphIdx = idx;
             }
         }
     }
@@ -691,21 +692,16 @@ function stopVideoKeepAwake() {
     v.remove();
   }
 }
+setTimeout(() => {
+    // Initialize the TTS functionality
+    window.ttsInstance = new ReadParagraphTTS();
+    // Initialize Dark Mode (button placed to the left of TTS button)
+    window.darkModeInstance = new DarkModeFunctionality();
+    // Initialize Table of Contents (positioned beneath buttons)
+    window.tocInstance = new TableOfContents({ offsetTop: 80 });
+    // Attach continuous + stop buttons once dark mode container exists
 
-// Initialize the TTS functionality
-const ttsInstance = new ReadParagraphTTS();
-// Initialize Dark Mode (button placed to the left of TTS button)
-const darkModeInstance = new DarkModeFunctionality(ttsInstance.button);
-// Initialize Table of Contents (positioned beneath buttons)
-const tocInstance = new TableOfContents({ offsetTop: 80 });
-// Attach continuous + stop buttons once dark mode container exists
-if (darkModeInstance && darkModeInstance.container) {
-    ttsInstance.attachExtraButtons(darkModeInstance.container);
-} else {
-    // Fallback after a short delay if container not yet ready
-    setTimeout(() => {
-        if (darkModeInstance && darkModeInstance.container) {
-            ttsInstance.attachExtraButtons(darkModeInstance.container);
-        }
-    }, 100);
-}
+    if (window.darkModeInstance && window.darkModeInstance.container) {
+        window.ttsInstance.attachExtraButtons(window.darkModeInstance.container);
+    }
+}, 10000);
